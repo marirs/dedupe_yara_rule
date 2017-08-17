@@ -66,7 +66,7 @@ def extract(yara_file):
     """
     Extracts rules, commented rules and imports from a given yara file
     :param yara_file: Yara file
-    :return: tuple (list of imports/None, list yara rules/None, list of commented yara rules/None)
+    :return: tuple (list of imports/None, list of yara rules/None, list of commented yara rules/None)
     """
     content = None
     yara_rules = []
@@ -150,8 +150,7 @@ def dedupe(yara_rules_path, yara_output_path):
         if imports:
             # we found some imports
             all_imports.update(imports)
-            deduped_content = "".join(imports)
-            deduped_content += "\n\n\n"
+            deduped_content = "".join(imports) + "\n"*3
 
         if commented_yar_rules:
             # commented rules found
@@ -169,8 +168,7 @@ def dedupe(yara_rules_path, yara_output_path):
             for r in yar_rules:
                 rulename = r.splitlines()[0].strip().replace("{","").strip()
                 if not rulename in rule_names:
-                    deduped_content += "".join(r)
-                    deduped_content += "\n\n"
+                    deduped_content += "".join(r) + "\n"*2
                     rule_names.update(rulename)
                     all_yara_rules.add(r)
                 else:
