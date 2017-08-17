@@ -21,7 +21,7 @@ marirs (at) gmail.com / Licence: GPL
 Disclaimer: This script is provided as-is without any warranty. Use at your own Risk :)
 Report bugs/issues at: https://github.com/marirs/dedupe_yara_rule/issues
 
-[*] '/Users/sgp/Downloads/yara_new' set to be the output directory!
+[*] '/Users/macuser/yara/yara_new' set to be the output directory!
 [*] Total files to process: 415 files in 12 dirs.
 [-] No yara rules found in Antidebug_AntiVM_index.yar
 [-] No yara rules found in Crypto_index.yar
