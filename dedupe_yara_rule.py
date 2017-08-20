@@ -5,19 +5,24 @@
 Author: marirs
 Description: Look at files in a given path for yara rules, and dedupe them based on rule name
 Version: 0.1
-Requirements: python 2.7 & yara-python
+Requirements: python 2.7 & yara-python, re2 (for regex performance)
 Changelog: 0.1: initial commit
 """
 from __future__ import print_function
 
 import os
 import io
-import re
 import sys
 import argparse
 import fnmatch
+import threading
 from datetime import datetime
 from itertools import groupby
+
+try:
+    import re2 as re
+except ImportError:
+    import re
 
 try:
     import yara
@@ -31,6 +36,44 @@ __author__ = "marirs@gmail.com"
 __license__ = "GPL"
 __file__ = "dedupe_yara_rule.py"
 
+all_imports = set()
+all_yara_rules = set()
+rule_names = set()
+total_duplicate_rules = 0
+total_rules = 0
+yara_rule_regex = r"(^[\s+private]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"
+comments_regex = r"(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/|^//.*?$)"
+imports_regex = r"(^import\s+.*?$)"
+rules_re = re.compile(yara_rule_regex, re.MULTILINE | re.DOTALL)
+import_re = re.compile(imports_regex, re.MULTILINE | re.DOTALL)
+comments_re = re.compile(comments_regex, re.MULTILINE | re.DOTALL)
+
+__spin_threads__ = 10   # threads to create for processing
+lock = threading.Lock()
+
+#
+# threding worker class
+#
+class _tworker(threading.Thread):
+    """
+    desc: threading class for certain functions that
+    returns value. can be used with functions that don't return value as well
+    input: function, function arguments
+    return:
+    """
+    def __init__(self, *args, **kwargs):
+        super(_tworker, self).__init__(*args, **kwargs)
+
+        self._return = None
+
+    def run(self):
+        if self._Thread__target is not None:
+            self._return = self._Thread__target(*self._Thread__args, **self._Thread__kwargs)
+
+    def join(self, *args, **kwargs):
+        super(_tworker, self).join(*args, **kwargs)
+
+        return self._return
 
 def chk_yara_import(Import):
     """
@@ -73,27 +116,25 @@ def extract(yara_file):
     commented_yar_rules = []
     imports = []
     result_tuple = None
-    yara_rule_regex = r"(^[\s+private]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"
-    comments_regex = r"(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/|^//.*?$)"
-    imports_regex = r"(^import\s+.*?$)"
 
     with io.open(yara_file, "r", encoding="utf-8") as rule_file:
         # Read from rule file
-        content = rule_file.read()
+        try:
+            content = rule_file.read()
+        except Exception, err:
+            print ("[!] {}: {}".format(rule_file, err))
+            content = None
 
     if not content:
         return (None, None, None)
 
-    rules_re = re.compile(yara_rule_regex, re.MULTILINE|re.DOTALL)
     yara_rules = rules_re.findall(content)
-    # print ("File - {} [# of Rules - {}]".format(yara_file,len(match)))
+    print ("[{:>5} rules] {}".format(len(yara_rules),yara_file))
     if yara_rules:
         # we have some yara rules in this file
         # lets check for comments or commented rules & the imports
         # in this rule file
-        import_re = re.compile(imports_regex, re.MULTILINE|re.DOTALL)
         imports = import_re.findall(content)
-        comments_re = re.compile(comments_regex, re.MULTILINE|re.DOTALL)
         commented_yar_rules = comments_re.findall(content)
         if commented_yar_rules:
             commented_yar_rules = [comments for sub in commented_yar_rules for comments in sub]
@@ -107,31 +148,17 @@ def extract(yara_file):
     result_tuple = (imports, yara_rules, commented_yar_rules)
     return result_tuple
 
-def dedupe(yara_rules_path, yara_output_path):
+def dedupe(yara_files, yara_output_path):
     """
     dedupe yara rules and store the unique ones in the output directory
     :param yara_rules_path: path to where yara rules are present
     :param yara_output_path: path to where deduped yara rules are written
     :return:
     """
-    all_imports = set()
-    all_yara_rules = set()
-    rule_names = set()
     deduped_content = None
-    total_duplicate_rules = 0
-    total_rules = 0
     yara_rule_errors = {}
     yara_deduped_rules_path = os.path.join(yara_output_path,"deduped_rules")
     yara_commeted_rules_path = os.path.join(yara_output_path,"commented_rules")
-    file_types = ["*.yar","*.yara"]
-    yara_files = [os.path.join(root,f) for root, dir, files in os.walk(yara_rules_path) for f in fnmatch.filter(files, "*.yar") ]
-    if not yara_files:
-        exit("[!] 0 yara files to process from '{}'!".format(yara_rules_path))
-
-    print ("[*] Total files to process: {} files in {} dirs.".format(
-        len(yara_files),
-        len(set([os.path.basename(os.path.normpath(os.path.dirname(f))) for f in yara_files])))
-    )
 
     # go over all the yara rule files and process them
     for yf in yara_files:
@@ -144,12 +171,14 @@ def dedupe(yara_rules_path, yara_output_path):
 
         imports, yar_rules, commented_yar_rules = extract(yf)
         if not imports and not yar_rules and not commented_yar_rules:
-            print("[-] No yara rules found in {}".format(yf_file_name))
+            print("[{:>5} rules] {}".format(0,yf_file_name))
             continue
 
         if imports:
             # we found some imports
+            lock.acquire()
             all_imports.update(imports)
+            lock.release()
             deduped_content = "".join(imports) + "\n"*3
 
         if commented_yar_rules:
@@ -170,7 +199,9 @@ def dedupe(yara_rules_path, yara_output_path):
                 if not rulename in rule_names:
                     deduped_content += "".join(r) + "\n"*2
                     rule_names.update(rulename)
+                    lock.acquire()
                     all_yara_rules.add(r)
+                    lock.release()
                 else:
                     total_duplicate_rules += 1
                     print(" -> Duplicate rule: {}".format(rulename))
@@ -178,6 +209,76 @@ def dedupe(yara_rules_path, yara_output_path):
             # write the deduped rule to file
             write(os.path.join(new_yf_rule_dir, yf_file_name), deduped_content)
 
+
+if __name__ == "__main__":
+    """
+    script begins :)
+    """
+    print ("Yara Rules deduper v{}".format(__version__))
+    print ("marirs (at) gmail.com / Licence: GPL")
+    print ("Disclaimer: This script is provided as-is without any warranty. Use at your own Risk :)")
+    print ("Report bugs/issues at: https://github.com/marirs/dedupe_yara_rule/issues\n")
+
+    parser = argparse.ArgumentParser(description='dedupe yara rules')
+    parser.add_argument('-p', '--path', help='yara rules path', required=True)
+    parser.add_argument('-o', '--out', default='./yara_new', help="output directory")
+    args = parser.parse_args()
+
+    if args.path:
+        if not os.path.exists(args.path):
+            exit ("[!] {} does not exist. a valid path to yara rules is required!".format(args.path))
+
+    if args.out:
+        misc_folders = ["commented_rules","deduped_rules"]
+        if not os.path.exists(args.out):
+            try:
+                os.mkdir(args.out)
+            except:
+                exit ("[!] output directory does not exist and could not be created ({})".format(args.out))
+
+        for f in misc_folders:
+            if not os.path.exists(os.path.join(args.out,f)): os.mkdir(os.path.join(args.out,f))
+        print ("[*] '{}' set to be the output directory!".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
+
+    yara_files = [os.path.join(root,f) for root, dir, files in os.walk(args.path) for f in fnmatch.filter(files, "*.yar") ]
+    if not yara_files:
+        exit("[!] 0 yara files to process from '{}'!".format(yara_rules_path))
+
+    print ("[*] Total files to process: {} files in {} dirs.".format(
+        len(yara_files),
+        len(set([os.path.basename(os.path.normpath(os.path.dirname(f))) for f in yara_files])))
+    )
+    total_items = len(yara_files)
+    if total_items <= __spin_threads__: __spin_threads__ = total_items
+    each_thread_items_count = total_items / __spin_threads__
+    extra_items_count = total_items % __spin_threads__
+    yara_files = [yara_files[i:i + each_thread_items_count] for i in
+                    xrange(0, len(yara_files), each_thread_items_count)]
+    __spin_threads__ = len(yara_files)
+    threads = []
+    print ("[*] threads: {} | each thread: {} files, extra thread: {} files".format(
+        __spin_threads__,each_thread_items_count, extra_items_count))
+    for i in range(__spin_threads__):
+        t = _tworker(target=dedupe, args=(yara_files[i],args.out,))
+        t.start()
+        threads.append(t)
+
+    # yield - wait for the threads
+    # to complete their job
+    for each_thread in threads:
+        try:
+            each_thread.join()
+        except TypeError:
+            print("%s completed:" % str(each_thread))
+
+    """
+    try:
+        dedupe(args.path, args.out)
+    except KeyboardInterrupt:
+        exit ("\n[!] ^C pressed; stopping script!")
+    """
+
+    yara_deduped_rules_path = os.path.join(args.out,"deduped_rules")
     total_rules = len(all_yara_rules)
     # Merge all the yara rules
     all_yara_rules = "\n".join(list(all_imports)) + "\n"*2 + "\n\n".join(list(all_yara_rules))
@@ -217,40 +318,5 @@ def dedupe(yara_rules_path, yara_output_path):
             yara.compile(file)
         except Exception, err:
             print (" -> {} [skipped file due to compile error...]".format(err))
-
-if __name__ == "__main__":
-    """
-    script begins :)
-    """
-    print ("Yara Rules deduper v{}".format(__version__))
-    print ("marirs (at) gmail.com / Licence: GPL")
-    print ("Disclaimer: This script is provided as-is without any warranty. Use at your own Risk :)")
-    print ("Report bugs/issues at: https://github.com/marirs/dedupe_yara_rule/issues\n")
-
-    parser = argparse.ArgumentParser(description='dedupe yara rules')
-    parser.add_argument('-p', '--path', help='yara rules path', required=True)
-    parser.add_argument('-o', '--out', default='./yara_new', help="output directory")
-    args = parser.parse_args()
-
-    if args.path:
-        if not os.path.exists(args.path):
-            exit ("[!] {} does not exist. a valid path to yara rules is required!".format(args.path))
-
-    if args.out:
-        misc_folders = ["commented_rules","deduped_rules"]
-        if not os.path.exists(args.out):
-            try:
-                os.mkdir(args.out)
-            except:
-                exit ("[!] output directory does not exist and could not be created ({})".format(args.out))
-
-        for f in misc_folders:
-            if not os.path.exists(os.path.join(args.out,f)): os.mkdir(os.path.join(args.out,f))
-        print ("[*] '{}' set to be the output directory!".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
-
-    try:
-        dedupe(args.path, args.out)
-    except KeyboardInterrupt:
-        exit ("\n[!] ^C pressed; stopping script!")
 
     print ("[*] All rules organised in {}".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
