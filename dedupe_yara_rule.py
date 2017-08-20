@@ -258,26 +258,17 @@ if __name__ == "__main__":
     threads = []
     print ("[*] threads: {} | each thread: {} files, extra thread: {} files".format(
         __spin_threads__,each_thread_items_count, extra_items_count))
+
     for i in range(__spin_threads__):
         t = _tworker(target=dedupe, args=(yara_files[i],args.out,))
         t.start()
         threads.append(t)
-
     # yield - wait for the threads
     # to complete their job
-    for each_thread in threads:
-        try:
-            each_thread.join()
-        except TypeError:
-            print("%s completed:" % str(each_thread))
+    while threading.active_count() > 0:
+        time.sleep(0.1)
 
-    """
-    try:
-        dedupe(args.path, args.out)
-    except KeyboardInterrupt:
-        exit ("\n[!] ^C pressed; stopping script!")
-    """
-
+    # post dedupe
     yara_deduped_rules_path = os.path.join(args.out,"deduped_rules")
     total_rules = len(all_yara_rules)
     # Merge all the yara rules
