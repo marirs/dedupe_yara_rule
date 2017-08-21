@@ -27,8 +27,9 @@ except ImportError:
 
 try:
     import yara
+    YARAMODULE = True
 except:
-    exit("[!] yara-python is not installed!")
+    YARAMODULE = False
 
 sys.dont_write_bytecode = True
 
@@ -200,6 +201,7 @@ if __name__ == "__main__":
     sys.stdout.write ("\nmarirs (at) gmail.com / Licence: GPL")
     sys.stdout.write ("\nDisclaimer: This script is provided as-is without any warranty. Use at your own Risk :)")
     sys.stdout.write ("\nReport bugs/issues at: https://github.com/marirs/dedupe_yara_rule/issues\n")
+    if not YARAMODULE:  sys.stdout.write("\n[!] yara-python is not installed, will skip rule verification & module import check!")
 
     parser = argparse.ArgumentParser(description='dedupe yara rules')
     parser.add_argument('-p', '--path', help='yara rules path', required=True)
@@ -253,11 +255,12 @@ if __name__ == "__main__":
     write_file(os.path.join(yara_deduped_rules_path, "all_in_one.yar"), all_yara_rules)
     sys.stdout.write ("\n[*] Total # of Rules: {}\n[*] Total # of Duplicate Rules: {}".format(total_rules,total_duplicate_rules))
 
-    # check if imports are available or not
-    sys.stdout.write ("\n"+"-"*35)
-    sys.stdout.write ("\n[*] Checking yara import modules...")
-    for module in all_imports:
-        sys.stdout.write ("\n -> {}: {}".format(module,"You dont have this module!" if not chk_yara_import(module) else "PASS"))
+    if YARAMODULE:
+        # check if imports are available or not
+        sys.stdout.write ("\n"+"-"*35)
+        sys.stdout.write ("\n[*] Checking yara import modules...")
+        for module in all_imports:
+            sys.stdout.write ("\n -> {}: {}".format(module,"You dont have this module!" if not chk_yara_import(module) else "PASS"))
 
     sys.stdout.write ("\n"+"-"*35)
     # write index files
@@ -265,7 +268,6 @@ if __name__ == "__main__":
     sys.stdout.write ("\n -> {}".format(os.path.join(yara_deduped_rules_path,"all_in_one_rules.yar")))
     yara_files = [os.path.join(root, f) for root, dir, files in os.walk(yara_deduped_rules_path) for f in
                   files if "all_in_one_rules.yar" not in f and f.endswith(file_types)]
-
     index_files = unicode("\n".join(["include \"{}\"".format(f) for f in yara_files]))
     write_file(os.path.join(yara_deduped_rules_path, "index.yar"), index_files)
     sys.stdout.write ("\n -> {}".format(os.path.join(yara_deduped_rules_path,"index.yar")))
@@ -277,17 +279,19 @@ if __name__ == "__main__":
         write_file(os.path.join(yara_deduped_rules_path, fname), list_of_files)
         sys.stdout.write ("\n -> {}".format(os.path.join(yara_deduped_rules_path,fname)))
     sys.stdout.write ("\n"+"-"*35)
-    # compile for rule errors
-    sys.stdout.write ("\n[*] Verifying rules...")
 
-    for file in yara_files:
-        try:
-            # verify the rule file
-            yara.compile(file)
-        except Exception, err:
-            sys.stdout.write ("\n -> {} [skipped file due to compile error...]".format(err))
+    if YARAMODULE:
+        # compile for rule errors
+        sys.stdout.write ("\n[*] Verifying rules...")
 
-    sys.stdout.write ("\n"+"-"*35)
+        for file in yara_files:
+            try:
+                # verify the rule file
+                yara.compile(file)
+            except Exception, err:
+                sys.stdout.write ("\n -> {} [skipped file due to compile error...]".format(err))
+        sys.stdout.write ("\n"+"-"*35)
+
     execution_time = time.time() - start_time
     sys.stdout.write ("\n[*] All rules organised in {}".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
     sys.stdout.write("\n[*] Time taken: {} seconds".format(datetime.timedelta(seconds=execution_time)))
