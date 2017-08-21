@@ -312,7 +312,7 @@ if __name__ == "__main__":
     sys.stdout.write ("\n[*] Creating index files...")
     sys.stdout.write ("\n -> {}".format(os.path.join(yara_deduped_rules_path,"all_in_one_rules.yar")))
     yara_files = [os.path.join(root, f) for root, dir, files in os.walk(yara_deduped_rules_path) for f in
-                  fnmatch.filter(files, "*.yar") if "all_in_one_rules.yar" not in f]
+                  files if "all_in_one_rules.yar" not in f and f.endswith(file_types)]
     index_files = unicode("\n".join(["include \"{}\"".format(f) for f in yara_files]))
     write_file(os.path.join(yara_deduped_rules_path, "index.yar"), index_files)
     sys.stdout.write ("\n -> {}".format(os.path.join(yara_deduped_rules_path,"index.yar")))
