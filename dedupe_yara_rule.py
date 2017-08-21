@@ -14,12 +14,9 @@ import os
 import io
 import sys
 import argparse
-import fnmatch
 import threading
 import time
 import datetime
-
-# from datetime import datetime
 from itertools import groupby
 
 try:
@@ -51,7 +48,6 @@ imports_regex = r"(^import\s+.*?$)"
 rules_re = re.compile(yara_rule_regex, re.MULTILINE | re.DOTALL)
 import_re = re.compile(imports_regex, re.MULTILINE | re.DOTALL)
 comments_re = re.compile(comments_regex, re.MULTILINE | re.DOTALL)
-
 __spin_threads__ = 10   # threads to create for processing
 lock = threading.Lock()
 
@@ -205,7 +201,7 @@ def dedupe(yara_files, yara_output_path):
                 os.mkdir(new_yf_rule_dir)
 
             for r in yar_rules:
-                rulename = r.strip().splitlines()[0].strip().replace("{","").strip()
+                rulename = r.strip().splitlines()[0].partition("{")[0]
                 lock.acquire()
                 rule_dict[rulename] = rule_dict.get(rulename, [])
                 rule_dict[rulename].append(yf)
@@ -254,7 +250,8 @@ if __name__ == "__main__":
             if not os.path.exists(os.path.join(args.out,f)): os.mkdir(os.path.join(args.out,f))
             sys.stdout.write ("\n[*] '{}' set to be the output directory!".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
 
-    yara_files = [os.path.join(root,f) for root, dir, files in os.walk(args.path) for f in fnmatch.filter(files, "*.yar") ]
+    file_types = (".yar",".yara")
+    yara_files = [os.path.join(root,f) for root, dir, files in os.walk(args.path) for f in files if f.endswith(file_types) ]
     if not yara_files:
         exit("[!] 0 yara files to process from '{}'!".format(yara_rules_path))
 
@@ -290,7 +287,7 @@ if __name__ == "__main__":
 
     # post dedupe
     sys.stdout.write ("\n"+"-"*35)
-    sys.stdout.write ("\nDuplicate rules:")
+    sys.stdout.write ("\n[*] Duplicate rules:")
     for key,value in rule_dict.iteritems():
         if len(value) > 1:
             sys.stdout.write ("\n -> \"{}\" in {}".format(key,", ".join(value)))
@@ -306,7 +303,7 @@ if __name__ == "__main__":
 
     # check if imports are available or not
     sys.stdout.write ("\n"+"-"*35)
-    sys.stdout.write ("\n[*] Checking import modules...")
+    sys.stdout.write ("\n[*] Checking yara import modules...")
     for module in all_imports:
         sys.stdout.write ("\n -> {}: {}".format(module,"You dont have this module!" if not chk_yara_import(module) else "PASS"))
 
@@ -342,4 +339,3 @@ if __name__ == "__main__":
     sys.stdout.write ("\n[*] All rules organised in {}".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
     sys.stdout.write("\n[*] Time taken: {} seconds".format(datetime.timedelta(seconds=execution_time)))
     sys.stdout.write ("\n"+"-"*15+"\n")
-
