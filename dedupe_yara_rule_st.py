@@ -43,6 +43,7 @@ all_yara_rules = set()
 rule_names = set()
 total_duplicate_rules = 0
 total_rules = 0
+total_rules_written = 0
 rule_dict = {}
 yara_rule_regex = r"(^[\s+private\/\*]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"
 comments_regex = r"(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/|^//.*?$)"
@@ -50,6 +51,7 @@ imports_regex = r"(^import\s+.*?$)"
 rules_re = re.compile(yara_rule_regex, re.MULTILINE | re.DOTALL)
 import_re = re.compile(imports_regex, re.MULTILINE | re.DOTALL)
 comments_re = re.compile(comments_regex, re.MULTILINE | re.DOTALL)
+verbose = False
 
 
 def chk_yara_import(Import):
@@ -106,7 +108,10 @@ def extract(yara_file):
         return (None, None, None)
 
     yara_rules = rules_re.findall(content)
-    sys.stdout.write ("\n[{:>5} rules] {}".format(len(yara_rules),yara_file))
+    if verbose: 
+        sys.stdout.write ("\n[{:>5} rules] {}".format(len(yara_rules),yara_file))
+        sys.stdout.flush()
+
     if yara_rules:
         # clean 'em
         yara_rules = [rule.strip().strip("*/").strip().strip("/*").strip() for rule in yara_rules]
@@ -118,7 +123,7 @@ def extract(yara_file):
 
         if commented_yar_rules:
             commented_yar_rules = filter(None,
-                [comments for sub in commented_yar_rules for comments in sub if comments.strip().startswith("/*") or comments.strip().startswith("//")]
+                [comments for sub in commented_yar_rules for comments in sub if comments.strip().startswith(("/*","//"))]
             )
             # remove commented yara rules
             yara_rules = filter(lambda x: x not in "".join(commented_yar_rules), yara_rules)
@@ -140,6 +145,7 @@ def dedupe(yara_files, yara_output_path):
     global all_imports
     global all_yara_rules
     global rule_dict
+    global total_rules
     yara_deduped_rules_path = os.path.join(yara_output_path,"deduped_rules")
     yara_commeted_rules_path = os.path.join(yara_output_path,"commented_rules")
 
@@ -154,7 +160,10 @@ def dedupe(yara_files, yara_output_path):
 
         imports, yar_rules, commented_yar_rules = extract(yf)
         if not imports and not yar_rules and not commented_yar_rules:
-            sys.stdout.write("\n[{:>5} rules] {}".format(0,yf_file_name))
+            if verbose: 
+                sys.stdout.write("\n[{:>5} rules] {}".format(0,yf_file_name))
+                sys.stdout.flush()
+
             continue
 
         if imports:
@@ -172,6 +181,7 @@ def dedupe(yara_files, yara_output_path):
             write_file(os.path.join(new_yf_commented_rule_dir, yf_file_name), commented_yar_rules)
 
         if yar_rules:
+            total_rules += len(yar_rules)
             if not os.path.exists(new_yf_rule_dir):
                 os.mkdir(new_yf_rule_dir)
 
@@ -206,6 +216,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='dedupe yara rules')
     parser.add_argument('-p', '--path', help='yara rules path', required=True)
     parser.add_argument('-o', '--out', default='./yara_new', help="output directory")
+    parser.add_argument('-v', '--verbose', action="store_true", help="increase output verbosity")
     args = parser.parse_args()
 
     if args.path:
@@ -224,6 +235,8 @@ if __name__ == "__main__":
             if not os.path.exists(os.path.join(args.out,f)): os.mkdir(os.path.join(args.out,f))
             sys.stdout.write ("\n[*] '{}' set to be the output directory!".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
 
+    if args.verbose: verbose = True
+
     file_types = (".yar",".yara")
     yara_files = [os.path.join(root,f) for root, dir, files in os.walk(args.path) for f in files if f.endswith(file_types) ]
     if not yara_files:
@@ -233,7 +246,9 @@ if __name__ == "__main__":
         len(yara_files),
         len(set([os.path.basename(os.path.normpath(os.path.dirname(f))) for f in yara_files])))
     )
-
+    sys.stdout.write ("\n[*] processing files...")
+    sys.stdout.flush()
+   
     try:
         dedupe(yara_files,args.out)
     except KeyboardInterrupt:
@@ -246,14 +261,15 @@ if __name__ == "__main__":
         if len(value) > 1:
             sys.stdout.write ("\n -> \"{}\" in {}".format(key,", ".join(value)))
 
-    sys.stdout.write ("\n"+"-"*15)
+    total_rules_written = len(all_yara_rules)
+    sys.stdout.write ("\n"+"-"*10)
+    sys.stdout.write ("\n[*] Total Rules: {}\n[*] Total Rules after dedupe: {}\n[*] Total Duplicate Rules: {}".format(total_rules,total_rules_written,total_duplicate_rules))
+
     yara_deduped_rules_path = os.path.join(args.out,"deduped_rules")
-    total_rules = len(all_yara_rules)
     # Merge all the yara rules
     all_yara_rules = "\n".join(list(all_imports)) + "\n"*2 + "\n\n".join(list(all_yara_rules))
     # write all the deduped rules into 1 single file
     write_file(os.path.join(yara_deduped_rules_path, "all_in_one.yar"), all_yara_rules)
-    sys.stdout.write ("\n[*] Total # of Rules: {}\n[*] Total # of Duplicate Rules: {}".format(total_rules,total_duplicate_rules))
 
     if YARAMODULE:
         # check if imports are available or not
@@ -294,5 +310,5 @@ if __name__ == "__main__":
 
     execution_time = time.time() - start_time
     sys.stdout.write ("\n[*] All rules organised in {}".format(os.path.join(os.getcwd(),str(args.out).replace("./","")) if "./" in args.out else args.out ))
-    sys.stdout.write("\n[*] Time taken: {} seconds".format(datetime.timedelta(seconds=execution_time)))
+    sys.stdout.write("\n[*] Time taken: {}".format(datetime.timedelta(seconds=execution_time)))
     sys.stdout.write ("\n"+"-"*15+"\n")
