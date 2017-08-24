@@ -2,7 +2,9 @@
 
 variable: yara_rule_regex
 
-1. r"(^rule\s.*?\scondition.*?\s\})"  # - experiment 1
-2. r"(^ ?rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"  # - experiment 2
-3. r"(^[\s+]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})" - experiment 3
+1. r"((?smi)rule(.*?)\{(.*?condition:.*?)\})  # - experiment 1
+2. r"(^rule\s.*?\scondition.*?\s\})"  # - experiment 2
+3. r"(^ ?rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"  # - experiment 3
+4. r"(^[\s+]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})" - experiment 4
+
 
