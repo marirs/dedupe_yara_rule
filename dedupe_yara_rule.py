@@ -17,6 +17,7 @@ import argparse
 import threading
 import time
 import datetime
+import chardet
 from itertools import groupby
 
 try:
@@ -121,6 +122,7 @@ def extract(yara_file):
     result_tuple = None
     encodings = ['utf-8','cp1252','windows-1250', 'windows-1252','ascii']
     for e in encodings:
+        sys.stdout.flush()
         with io.open(yara_file, "r", encoding=e) as rule_file:
             # Read from rule file
             try:
@@ -133,7 +135,7 @@ def extract(yara_file):
                 else:
                     sys.stdout.write ("\n[!] No codec matched to open {}".format(yara_file))
                 content = None
-                
+
     if not content:
         return (None, None, None)
 
@@ -178,9 +180,11 @@ def dedupe(yara_files, yara_output_path):
     global total_rules
     yara_deduped_rules_path = os.path.join(yara_output_path,"deduped_rules")
     yara_commeted_rules_path = os.path.join(yara_output_path,"commented_rules")
+    which_yara_file = None
 
     # go over all the yara rule files and process them
     for yf in yara_files:
+        sys.stdout.flush()
         deduped_content = ""
         yara_src = ""
         yf_rule_dir = os.path.basename(os.path.normpath(os.path.dirname(yf)))
@@ -226,7 +230,7 @@ def dedupe(yara_files, yara_output_path):
                 if rulename not in rule_names:
                     deduped_content += "".join(r.strip()) + "\n"*2
                     rule_names.update([rulename])
-                    all_yara_rules.add(r.strip())
+                    all_yara_rules.add("\n// rule from: {}\n".format(yf) + r.strip() + "\n")
                 else:
                     total_duplicate_rules += 1
                     # sys.stdout.write("\n{:14}-> Duplicate rule: {} in {}".format(" ",rulename,yf))
@@ -234,7 +238,6 @@ def dedupe(yara_files, yara_output_path):
 
             # write the deduped rule to file
             write_file(os.path.join(new_yf_rule_dir, yf_file_name), unicode(deduped_content))
-
 
 if __name__ == "__main__":
     """
