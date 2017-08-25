@@ -95,8 +95,10 @@ def extract(yara_file):
     commented_yar_rules = []
     imports = []
     result_tuple = None
+
     encodings = ['utf-8','cp1252','windows-1250', 'windows-1252','ascii']
     for e in encodings:
+        sys.stdout.flush()
         with io.open(yara_file, "r", encoding=e) as rule_file:
             # Read from rule file
             try:
@@ -109,7 +111,7 @@ def extract(yara_file):
                 else:
                     sys.stdout.write ("\n[!] No codec matched to open {}".format(yara_file))
                 content = None
-                
+
     if not content:
         return (None, None, None)
 
@@ -199,10 +201,9 @@ def dedupe(yara_files, yara_output_path):
                 if rulename not in rule_names:
                     deduped_content += "".join(r.strip()) + "\n"*2
                     rule_names.update([rulename])
-                    all_yara_rules.add(r.strip())
+                    all_yara_rules.update(["\n// rule from: {}\n".format(yf) + r.strip() + "\n"])
                 else:
                     total_duplicate_rules += 1
-                    # sys.stdout.write("\n{:14}-> Duplicate rule: {} in {}".format(" ",rulename,yf))
 
             # write the deduped rule to file
             write_file(os.path.join(new_yf_rule_dir, yf_file_name), unicode(deduped_content))
@@ -273,11 +274,11 @@ if __name__ == "__main__":
 
     yara_deduped_rules_path = os.path.join(args.out,"deduped_rules")
     # Merge all the yara rules
-    all_yara_rules = "\n".join(list(all_imports)) + "\n"*2 + "\n\n".join(list(all_yara_rules))
+    all_yara_rules = "\n".join(list(all_imports)) + "\n"*2 + "\n\n".join(list(sorted(all_yara_rules)))
     # write all the deduped rules into 1 single file
     write_file(os.path.join(yara_deduped_rules_path, "all_in_one.yar"), all_yara_rules)
 
-    if YARAMODULE:
+    if YARAMODULE and all_imports:
         # check if imports are available or not
         sys.stdout.write ("\n"+"-"*35)
         sys.stdout.write ("\n[*] Checking yara import modules...")
