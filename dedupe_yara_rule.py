@@ -219,9 +219,9 @@ def dedupe(yara_files, yara_output_path):
         if yar_rules:
             lock.acquire()
             total_rules += len(yar_rules)
-            lock.release()
             if not os.path.isdir(new_yf_rule_dir):
                 os.mkdir(new_yf_rule_dir)
+            lock.release()
 
             for r in yar_rules:
                 rulename = r.strip().splitlines()[0].strip().partition("{")[0].strip()
