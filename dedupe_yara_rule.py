@@ -217,12 +217,14 @@ def dedupe(yara_files, yara_output_path):
             write_file(os.path.join(new_yf_commented_rule_dir, yf_file_name), commented_yar_rules)
 
         if yar_rules:
+            lock.acquire()
             total_rules += len(yar_rules)
-            if not os.path.exists(new_yf_rule_dir):
+            lock.release()
+            if not os.path.isdir(new_yf_rule_dir):
                 os.mkdir(new_yf_rule_dir)
 
             for r in yar_rules:
-                rulename = r.strip().splitlines()[0].partition("{")[0]
+                rulename = r.strip().splitlines()[0].strip().partition("{")[0].strip()
                 lock.acquire()
                 rule_dict[rulename] = rule_dict.get(rulename, [])
                 rule_dict[rulename].append(yf)
@@ -237,6 +239,7 @@ def dedupe(yara_files, yara_output_path):
 
             # write the deduped rule to file
             write_file(os.path.join(new_yf_rule_dir, yf_file_name), unicode(deduped_content))
+            
 
 if __name__ == "__main__":
     """
