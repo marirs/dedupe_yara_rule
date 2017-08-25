@@ -119,15 +119,21 @@ def extract(yara_file):
     commented_yar_rules = []
     imports = []
     result_tuple = None
-
-    with io.open(yara_file, "r", encoding="utf-8") as rule_file:
-        # Read from rule file
-        try:
-            content = rule_file.read()
-        except Exception, err:
-            sys.stdout.write ("\n[!] {}: {}".format(rule_file, err))
-            content = None
-
+    encodings = ['utf-8','cp1252','windows-1250', 'windows-1252','ascii']
+    for e in encodings:
+        with io.open(yara_file, "r", encoding=e) as rule_file:
+            # Read from rule file
+            try:
+                content = rule_file.read()
+                break
+            except Exception, err:
+                sys.stdout.write ("\n[!] {}: {}".format(yara_file, err))
+                if encodings.index(e)+1 < len(encodings):
+                    sys.stdout.write ("\n -> trying codec: {} for {}".format(encodings[encodings.index(e)+1], yara_file))
+                else:
+                    sys.stdout.write ("\n[!] No codec matched to open {}".format(yara_file))
+                content = None
+                
     if not content:
         return (None, None, None)
 
