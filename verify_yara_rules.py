@@ -81,6 +81,7 @@ if __name__ == "__main__":
         yara_rules = yare.findall(content)
         imports = set(imre.findall(content))
         print ("[*] Total rules in file: {}".format(len(yara_rules)))
+        print ("[*] Total imports in file: {}".format(len(imports) if imports else 0))
     if imports:
         print ("[*] Checking yara import modules...")
         for module in imports:
