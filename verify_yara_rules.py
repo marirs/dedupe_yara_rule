@@ -50,10 +50,13 @@ def chk_yara_import(Import):
 
 if __name__ == "__main__":
     print ("Yara Rules verify - v{}".format(__version__))
-    print ("by: {}\n".format(__author__))
+    print ("by: {}".format(__author__))
     parser = argparse.ArgumentParser(description='verify yara rules')
     parser.add_argument('-f', '--file', help='yara file to compile', required=True)
     args = parser.parse_args()
+    encodings = ['utf-8','cp1252','windows-1250', 'windows-1252','ascii']
+    content = None
+    imports = None
 
     if args.file:
         if not os.path.isfile(args.file):
@@ -61,16 +64,23 @@ if __name__ == "__main__":
 
     yara_file = args.file
 
-    with io.open(yara_file, "r", encoding="utf-8") as rule_file:
-         # Read from rule file
-        try:
-            content = rule_file.read()
-        except Exception, err:
-            exit ("\n[!] {}: {}".format(rule_file, err))
+    for e in encodings:
+        with io.open(yara_file, "r", encoding=e) as rule_file:
+            # Read from rule file
+            try:
+                content = unicode(rule_file.read())
+                break
+            except Exception, err:
+                print ("[!] {}: {}".format(yara_file, err))
+                if encodings.index(e)+1 < len(encodings):
+                    print ("[*] trying codec: {} for {}".format(encodings[encodings.index(e)+1], yara_file))
+                else:
+                    print ("[!] No codec matched to open {}".format(yara_file))
 
-    yara_rules = yare.findall(content)
-    imports = set(imre.findall(content))
-    print ("[*] Total rules in file: {}".format(len(yara_rules)))
+    if content:
+        yara_rules = yare.findall(content)
+        imports = set(imre.findall(content))
+        print ("[*] Total rules in file: {}".format(len(yara_rules)))
     if imports:
         print ("[*] Checking yara import modules...")
         for module in imports:
