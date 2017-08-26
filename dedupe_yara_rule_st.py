@@ -195,6 +195,7 @@ def dedupe(yara_files, yara_output_path):
 
             for r in yar_rules:
                 rulename = r.strip().splitlines()[0].strip().partition("{")[0].strip()
+                rulename = r.split(":")[0].strip() if ":" in rulename else rulename
                 rule_dict[rulename] = rule_dict.get(rulename, [])
                 rule_dict[rulename].append(yf)
 
