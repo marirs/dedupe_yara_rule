@@ -5,7 +5,7 @@
 Author: marirs
 Description: Look at files in a given path for yara rules, and dedupe them based on rule name
 Version: 0.2
-Requirements: python 3.6 & yara-python, re2 (for regex performance)
+Requirements: python 3.5 & yara-python, re2 (for regex performance)
 Changelog: 0.1: initial commit
 Changelog: 0.2: Porting to Python 3.5. Multi-threading option added; single-threaded by default.
 """
@@ -266,10 +266,10 @@ def dedupe_threaded():
     threads = []
     sys.stdout.write("\n[*] threads: {} | each thread: {} files, extra thread: {} files".format(
         __spin_threads__, each_thread_items_count, extra_items_count))
-    #
+
     sys.stdout.write("\n[*] processing files...")
     sys.stdout.flush()
-    #
+
     for i in range(__spin_threads__):
         t = ThreadWorker(target=dedupe, args=(yara_files[i], args.out,))
         t.daemon = True

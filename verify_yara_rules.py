@@ -4,9 +4,10 @@
 """
 Author: marirs
 Description: Look at files in a given path for yara rules, and dedupe them based on rule name
-Version: 0.1
-Requirements: python 2.7 & yara-python, re2 (for regex performance)
+Version: 0.2
+Requirements: python 3.5 & yara-python, re2 (for regex performance)
 Changelog: 0.1: initial commit
+Changelog: 0.2: Porting to Python 3.5. Multi-threading option added; single-threaded by default.
 """
 
 import os
@@ -26,7 +27,7 @@ except ImportError:
 
 sys.dont_write_bytecode = True
 
-__version__ = 0.1
+__version__ = 0.2
 __author__ = "marirs@gmail.com"
 __license__ = "GPL"
 __file__ = "verify_yara_rules.py"
@@ -82,18 +83,17 @@ if __name__ == "__main__":
     if content:
         yara_rules = yare.findall(content)
         imports = set(imre.findall(content))
-        print(("[*] Total rules in file: {}".format(len(yara_rules))))
-        print(("[*] Total imports in file: {}".format(len(imports) if imports else 0)))
+        print("[*] Total rules in file: {}".format(len(yara_rules)))
+        print("[*] Total imports in file: {}".format(len(imports) if imports else 0))
     if imports:
         print("[*] Checking yara import modules...")
         for module in imports:
-            print(
-                (" -> {}: {}".format(module, "You dont have this module!" if not chk_yara_import(module) else "PASS")))
-        print(("-" * 35))
+            print(" -> {}: {}".format(module, "You dont have this module!" if not chk_yara_import(module) else "PASS"))
+        print("-" * 35)
 
-    print(("[*] Verifying rules in file: \"{}\"".format(yara_file)))
+    print("[*] Verifying rules in file: \"{}\"".format(yara_file))
     try:
         yara.compile(yara_file)
-        print((" -> \"{}\" compiled well.".format(yara_file)))
+        print(" -> \"{}\" compiled well.".format(yara_file))
     except Exception as err:
-        print((" -> {}".format(err)))
+        print(" -> {}".format(err))
