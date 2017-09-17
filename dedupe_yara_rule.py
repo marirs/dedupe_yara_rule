@@ -19,6 +19,8 @@ import threading
 import time
 from itertools import groupby
 
+from collections import defaultdict
+
 try:
     import re2 as re
 except ImportError:
@@ -44,7 +46,7 @@ rule_names = set()
 total_duplicate_rules = 0
 total_rules = 0
 total_rules_written = 0
-rule_dict = {}
+rule_dict = defaultdict(list)
 yara_rule_regex = r"(^[\s+private\/\*]*rule\s[0-9a-zA-Z_\@\#\$\%\^\&\(\)\-\=\:\s]+\{.*?condition.*?\s\})"
 comments_regex = r"(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/|^//.*?$)"
 imports_regex = r"(^import\s+.*?$)"
@@ -227,17 +229,16 @@ def dedupe(yara_files, yara_output_path):
                 os.mkdir(new_yf_rule_dir)
             lock.release()
 
-            for r in yar_rules:
-                rulename = r.strip().splitlines()[0].strip().partition("{")[0].strip()
-                rulename = r.split(":")[0].strip() if ":" in rulename else rulename
+            for rule in yar_rules:
+                rulename = rule.strip().splitlines()[0].strip().partition("{")[0].strip()
+                rulename = rule.split(":")[0].strip() if ":" in rulename else rulename
                 lock.acquire()
-                rule_dict[rulename] = rule_dict.get(rulename, [])
                 rule_dict[rulename].append(yf)
 
                 if rulename not in rule_names:
-                    deduped_content += "".join(r.strip()) + "\n" * 2
-                    rule_names.update([rulename])
-                    all_yara_rules.update(["\n// rule from: {}\n".format(yf) + r.strip() + "\n"])
+                    deduped_content += "".join(rule.strip()) + "\n" * 2
+                    rule_names.add(rulename)
+                    all_yara_rules.add("\n// rule from: {}\n".format(yf) + rule.strip() + "\n")
                 else:
                     total_duplicate_rules += 1
                 lock.release()
@@ -324,8 +325,7 @@ if __name__ == "__main__":
             sys.stdout.write("\n[*] '{}' set to be the output directory!".format(
                 os.path.join(os.getcwd(), str(args.out).replace("./", "")) if "./" in args.out else args.out))
 
-    if args.verbose:
-        verbose = True
+    verbose = args.verbose
 
     file_types = (".yar", ".yara")
     yara_files = [os.path.join(root, f) for root, dir, files in os.walk(args.path) for f in files if
@@ -338,17 +338,20 @@ if __name__ == "__main__":
             len(set([os.path.basename(os.path.normpath(os.path.dirname(f))) for f in yara_files])))
         )
 
+    sys.stdout.write("\n[*] Deduping...")
+
     if args.threaded:
         dedupe_threaded()
     else:
         dedupe_serial()
 
     # post dedupe
-    sys.stdout.write("\n" + "-" * 35)
-    sys.stdout.write("\n[*] Duplicate rules:")
-    for key, value in list(rule_dict.items()):
-        if len(value) > 1:
-            sys.stdout.write("\n -> \"{}\" in {}".format(key, ", ".join(value)))
+    if verbose:
+        sys.stdout.write("\n" + "-" * 35)
+        sys.stdout.write("\n[*] Duplicate rules:")
+        for key, value in list(rule_dict.items()):
+            if len(value) > 1:
+                sys.stdout.write("\n -> \"{}\" in {}".format(key, ", ".join(value)))
 
     total_rules_written = len(all_yara_rules)
     sys.stdout.write("\n" + "-" * 10)
