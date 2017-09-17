@@ -1,0 +1,13 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Python template
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+env-*
+/env-dedupe_yara_rule/
+/yara_new/
+
+.idea
