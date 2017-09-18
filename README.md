@@ -9,13 +9,13 @@ It also organises & creates:
 
 ## Requirements
 
-1. Python 2.7
+1. Python 3.5
 2. yara-python
 
 ## Example
 
 ```
-$ python dedupe_yara_rule.py -p yara/
+$ python3.5 dedupe_yara_rule.py -p yara/
 Yara Rules deduper v0.1
 marirs (at) gmail.com / Licence: GPL
 Disclaimer: This script is provided as-is without any warranty. Use at your own Risk :)
